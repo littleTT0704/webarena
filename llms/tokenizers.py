@@ -1,7 +1,9 @@
 from typing import Any
 import os
 import tiktoken
-from transformers import LlamaTokenizer  # type: ignore
+from transformers import AutoTokenizer
+
+# from transformers import LlamaTokenizer  # type: ignore
 
 
 class Tokenizer(object):
@@ -9,13 +11,13 @@ class Tokenizer(object):
         if provider == "openai":
             self.tokenizer = tiktoken.encoding_for_model(model_name)
         elif provider == "huggingface":
-            self.tokenizer = LlamaTokenizer.from_pretrained(
+            self.tokenizer = AutoTokenizer.from_pretrained(
                 model_name, token=os.environ.get("HF_TOKEN")
             )
             # turn off adding special tokens automatically
-            self.tokenizer.add_special_tokens = False  # type: ignore[attr-defined]
-            self.tokenizer.add_bos_token = False  # type: ignore[attr-defined]
-            self.tokenizer.add_eos_token = False  # type: ignore[attr-defined]
+            # self.tokenizer.add_special_tokens = False  # type: ignore[attr-defined]
+            # self.tokenizer.add_bos_token = False  # type: ignore[attr-defined]
+            # self.tokenizer.add_eos_token = False  # type: ignore[attr-defined]
         else:
             raise NotImplementedError
 

@@ -38,13 +38,12 @@ class PromptConstructor(object):
     def get_lm_api_input(
         self, intro: str, examples: list[tuple[str, str]], current: str
     ) -> APIInput:
-
         """Return the require format for an API"""
         message: list[dict[str, str]] | str
         if "openai" in self.lm_config.provider:
             if self.lm_config.mode == "chat":
                 message = [{"role": "system", "content": intro}]
-                for (x, y) in examples:
+                for x, y in examples:
                     message.append(
                         {
                             "role": "system",
@@ -99,6 +98,28 @@ class PromptConstructor(object):
                     # add the current observation
                     message += f"{BOS}{B_INST} {current.strip()} {E_INST} {self.instruction['meta_data'].get('force_prefix', '')}"
 
+                    return message
+                else:
+                    raise ValueError("Only chat mode is supported for Llama-2")
+            elif "Llama-3" in self.lm_config.model:
+                if self.lm_config.mode == "chat":
+                    message = [{"role": "system", "content": intro}]
+                    for x, y in examples:
+                        message.append(
+                            {
+                                "role": "system",
+                                "name": "example_user",
+                                "content": x,
+                            }
+                        )
+                        message.append(
+                            {
+                                "role": "system",
+                                "name": "example_assistant",
+                                "content": y,
+                            }
+                        )
+                    message.append({"role": "user", "content": current})
                     return message
                 else:
                     raise ValueError("Only chat mode is supported for Llama-2")
@@ -198,9 +219,7 @@ class DirectPromptConstructor(PromptConstructor):
         if match:
             return match.group(1).strip()
         else:
-            raise ActionParsingError(
-                f"Cannot parse action from response {response}"
-            )
+            raise ActionParsingError(f"Cannot parse action from response {response}")
 
 
 class CoTPromptConstructor(PromptConstructor):
