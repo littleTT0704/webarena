@@ -38,13 +38,12 @@ class PromptConstructor(object):
     def get_lm_api_input(
         self, intro: str, examples: list[tuple[str, str]], current: str
     ) -> APIInput:
-
         """Return the require format for an API"""
         message: list[dict[str, str]] | str
         if "openai" in self.lm_config.provider:
             if self.lm_config.mode == "chat":
                 message = [{"role": "system", "content": intro}]
-                for (x, y) in examples:
+                for x, y in examples:
                     message.append(
                         {
                             "role": "system",
@@ -102,6 +101,26 @@ class PromptConstructor(object):
                     return message
                 else:
                     raise ValueError("Only chat mode is supported for Llama-2")
+            elif "Llama-3" in self.lm_config.model:
+                if self.lm_config.mode == "chat":
+                    message = [{"role": "system", "content": intro}]
+                    for x, y in examples:
+                        message.append(
+                            {
+                                "role": "user",
+                                "content": x,
+                            }
+                        )
+                        message.append(
+                            {
+                                "role": "assistant",
+                                "content": y,
+                            }
+                        )
+                    message.append({"role": "user", "content": current})
+                    return message
+                else:
+                    raise ValueError("Only chat mode is supported for Llama-3")
             else:
                 raise ValueError(
                     f"Huggingface models do not support model_tag {self.lm_config.gen_config['model_tag']}"
@@ -198,9 +217,7 @@ class DirectPromptConstructor(PromptConstructor):
         if match:
             return match.group(1).strip()
         else:
-            raise ActionParsingError(
-                f"Cannot parse action from response {response}"
-            )
+            raise ActionParsingError(f"Cannot parse action from response {response}")
 
 
 class CoTPromptConstructor(PromptConstructor):
