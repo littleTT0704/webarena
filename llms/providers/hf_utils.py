@@ -1,4 +1,5 @@
 from text_generation import Client  # type: ignore
+import os
 
 
 def generate_from_huggingface_completion(
@@ -29,7 +30,21 @@ def generate_from_huggingface_chat_completion(
     max_new_tokens: int,
     stop_sequences: list[str] | None = None,
 ) -> str:
-    client = Client(model_endpoint, timeout=60)
+    for message in prompt:
+        message["content"] = message["content"].replace(
+            "The information in this tab has been changed. This tab contains invalid data. Please resolve this before saving. Loading... ",
+            "",
+        )
+
+    client = Client(
+        model_endpoint,
+        timeout=60,
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {os.environ.get('HF_TOKEN', '')}",
+            "Content-Type": "application/json",
+        },
+    )
     generation: str = (
         client.chat(
             messages=prompt,
@@ -38,7 +53,7 @@ def generate_from_huggingface_chat_completion(
             max_tokens=max_new_tokens,
         )
         .choices[0]
-        .message
+        .message.content
     )
 
     return generation

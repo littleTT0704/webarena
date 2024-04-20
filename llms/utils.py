@@ -44,7 +44,7 @@ def call_llm(
     elif lm_config.provider == "huggingface":
         if "Llama-3" in lm_config.model:
             assert isinstance(prompt, list)
-            response = generate_from_huggingface_completion(
+            response = generate_from_huggingface_chat_completion(
                 prompt=prompt,
                 model_endpoint=lm_config.gen_config["model_endpoint"],
                 temperature=lm_config.gen_config["temperature"],
@@ -54,7 +54,7 @@ def call_llm(
             )
         else:
             assert isinstance(prompt, str)
-            response = generate_from_huggingface_chat_completion(
+            response = generate_from_huggingface_completion(
                 prompt=prompt,
                 model_endpoint=lm_config.gen_config["model_endpoint"],
                 temperature=lm_config.gen_config["temperature"],
