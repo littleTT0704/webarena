@@ -159,11 +159,15 @@ class ReflectAgent(Agent):
         lm_config: lm_config.LMConfig,
         intention_prompt_constructor: IntentionPromptConstructor,
         insight_prompt_constructor: InsightPromptConstructor,
+        intention_model: str,
+        insight_model: str,
     ) -> None:
         super().__init__()
         self.lm_config = lm_config
         self.intention_prompt_constructor = intention_prompt_constructor
         self.insight_prompt_constructor = insight_prompt_constructor
+        self.intention_model = intention_model
+        self.insight_model = insight_model
         self.action_set_tag = action_set_tag
         self.intention = ""
         self.insight = ""
@@ -182,6 +186,7 @@ class ReflectAgent(Agent):
                 trajectory, intent, self.intention, meta_data
             )
             lm_config = self.lm_config
+            lm_config.model = self.insight_model
             n = 0
             while True:
                 response = call_llm(lm_config, prompt)
@@ -207,6 +212,7 @@ class ReflectAgent(Agent):
             trajectory, intent, self.insight, meta_data
         )
         lm_config = self.lm_config
+        lm_config.model = self.intention_model
         n = 0
         while True:
             response = call_llm(lm_config, prompt)
@@ -272,6 +278,8 @@ def construct_agent(args: argparse.Namespace) -> Agent:
             lm_config=llm_config,
             intention_prompt_constructor=intention_prompt_constructor,
             insight_prompt_constructor=insight_prompt_constructor,
+            intention_model=args.intention_model,
+            insight_model=args.insight_model,
         )
     else:
         raise NotImplementedError(f"agent type {args.agent_type} not implemented")

@@ -108,6 +108,16 @@ def config() -> argparse.Namespace:
         default="agent/prompts/jsons/insight_rui.json",
     )
     parser.add_argument(
+        "--intention_model",
+        type=str,
+        default="gpt-4-turbo",
+    )
+    parser.add_argument(
+        "--insight_model",
+        type=str,
+        default="gpt-4-turbo",
+    )
+    parser.add_argument(
         "--parsing_failure_th",
         help="When concesecutive parsing failure exceeds this threshold, the agent will stop",
         type=int,
