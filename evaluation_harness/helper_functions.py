@@ -1,4 +1,5 @@
 """Implements helper functions to assist evaluation cases where other evaluators are not suitable."""
+
 import json
 from typing import Any
 from urllib.parse import urlparse
@@ -49,9 +50,7 @@ def shopping_get_latest_order_url() -> str:
         "searchCriteria[pageSize]": "1",
     }
 
-    response = requests.get(
-        f"{SHOPPING}/rest/V1/orders", params=params, headers=header
-    )
+    response = requests.get(f"{SHOPPING}/rest/V1/orders", params=params, headers=header)
     assert response.status_code == 200
     response_obj = response.json()["items"][0]
     order_id = int(response_obj["increment_id"])
@@ -159,7 +158,7 @@ def llm_fuzzy_match(pred: str, reference: str, question: str) -> float:
     ]
 
     response = generate_from_openai_chat_completion(
-        model="gpt-4-1106-preview",
+        model="gpt-4-turbo",
         messages=messages,
         temperature=0,
         max_tokens=768,
@@ -194,7 +193,7 @@ def llm_ua_match(pred: str, reference: str, question: str) -> float:
     ]
 
     response = generate_from_openai_chat_completion(
-        model="gpt-4-1106-preview",
+        model="gpt-4-turbo",
         messages=messages,
         temperature=0,
         max_tokens=768,

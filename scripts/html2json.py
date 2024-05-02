@@ -30,7 +30,7 @@ def main(result_folder: str, config_json: str) -> None:
             if v["eval"]["reference_url"]:
                 v["reference_url"] = v["eval"].pop("reference_url")
             v.pop("eval")
-            if v.get("reference_answers", {}).get("exact_match", "") == "N/A":
+            if v.get("reference_answers", {}).get("fuzzy_match", "") == "N/A":
                 v["achievable"] = False
             else:
                 v["achievable"] = True
@@ -69,10 +69,7 @@ def main(result_folder: str, config_json: str) -> None:
                     with open(filename, "wb") as f:  # type: ignore[assignment]
                         f.write(image_data)  # type: ignore[arg-type]
                     image_observations.append(filename)
-                urls = [
-                    url.get_text()
-                    for url in soup.find_all("h3", {"class": "url"})
-                ]
+                urls = [url.get_text() for url in soup.find_all("h3", {"class": "url"})]
                 actions = [
                     action.get_text()
                     for action in soup.find_all(
@@ -81,9 +78,7 @@ def main(result_folder: str, config_json: str) -> None:
                 ]
                 parsed_actions = [
                     action.get_text()
-                    for action in soup.find_all(
-                        "div", {"class": "parsed_action"}
-                    )
+                    for action in soup.find_all("div", {"class": "parsed_action"})
                 ]
                 # fill action with parsed action if action is empty
                 for i in range(len(actions)):
@@ -119,8 +114,6 @@ def main(result_folder: str, config_json: str) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--result_folder", type=str)
-    parser.add_argument(
-        "--config_json", type=str, default="config_files/test.raw.json"
-    )
+    parser.add_argument("--config_json", type=str, default="config_files/test.raw.json")
     args = parser.parse_args()
     main(args.result_folder, args.config_json)
