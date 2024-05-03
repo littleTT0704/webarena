@@ -68,9 +68,7 @@ class TeacherForcingAgent(Agent):
                 elif self.action_set_tag == "id_accessibility_tree":
                     cur_action = create_id_based_action(a_str)
                 else:
-                    raise ValueError(
-                        f"Unknown action type {self.action_set_tag}"
-                    )
+                    raise ValueError(f"Unknown action type {self.action_set_tag}")
             except ActionParsingError as e:
                 cur_action = create_none_action()
 
@@ -119,30 +117,24 @@ class PromptAgent(Agent):
     def next_action(
         self, trajectory: Trajectory, intent: str, meta_data: dict[str, Any]
     ) -> Action:
-        prompt = self.prompt_constructor.construct(
-            trajectory, intent, meta_data
-        )
+        prompt = self.prompt_constructor.construct(trajectory, intent, meta_data)
         lm_config = self.lm_config
         n = 0
         while True:
             response = call_llm(lm_config, prompt)
-            force_prefix = self.prompt_constructor.instruction[
-                "meta_data"
-            ].get("force_prefix", "")
+            force_prefix = self.prompt_constructor.instruction["meta_data"].get(
+                "force_prefix", ""
+            )
             response = f"{force_prefix}{response}"
             n += 1
             try:
-                parsed_response = self.prompt_constructor.extract_action(
-                    response
-                )
+                parsed_response = self.prompt_constructor.extract_action(response)
                 if self.action_set_tag == "id_accessibility_tree":
                     action = create_id_based_action(parsed_response)
                 elif self.action_set_tag == "playwright":
                     action = create_playwright_action(parsed_response)
                 else:
-                    raise ValueError(
-                        f"Unknown action type {self.action_set_tag}"
-                    )
+                    raise ValueError(f"Unknown action type {self.action_set_tag}")
                 action["raw_prediction"] = response
                 break
             except ActionParsingError as e:
@@ -155,6 +147,104 @@ class PromptAgent(Agent):
 
     def reset(self, test_config_file: str) -> None:
         pass
+
+
+class ReflectAgent(Agent):
+    """prompt-based agent that emits action given the history and reflect after each action"""
+
+    @beartype
+    def __init__(
+        self,
+        action_set_tag: str,
+        lm_config: lm_config.LMConfig,
+        intention_prompt_constructor: IntentionPromptConstructor,
+        insight_prompt_constructor: InsightPromptConstructor,
+        intention_model: str,
+        insight_model: str,
+    ) -> None:
+        super().__init__()
+        self.lm_config = lm_config
+        self.intention_prompt_constructor = intention_prompt_constructor
+        self.insight_prompt_constructor = insight_prompt_constructor
+        self.intention_model = intention_model
+        self.insight_model = insight_model
+        self.action_set_tag = action_set_tag
+        self.intention = ""
+        self.insight = ""
+        self.first = True
+
+    def set_action_set_tag(self, tag: str) -> None:
+        self.action_set_tag = tag
+
+    @beartype
+    def next_action(
+        self, trajectory: Trajectory, intent: str, meta_data: dict[str, Any]
+    ) -> Action:
+        # generate insight from previous action
+        if not self.first:
+            prompt = self.insight_prompt_constructor.construct(
+                trajectory, intent, self.intention, meta_data
+            )
+            lm_config = self.lm_config
+            lm_config.model = self.insight_model
+            n = 0
+            while True:
+                response = call_llm(lm_config, prompt)
+                force_prefix = self.insight_prompt_constructor.instruction[
+                    "meta_data"
+                ].get("force_prefix", "")
+                response = f"{force_prefix}{response}"
+                n += 1
+                try:
+                    self.insight = self.insight_prompt_constructor.extract_action(
+                        response
+                    )
+                    break
+                except ActionParsingError as e:
+                    if n >= lm_config.gen_config["max_retry"]:
+                        self.insight = ""
+                        break
+        else:
+            self.first = False
+            self.insight = ""
+
+        prompt = self.intention_prompt_constructor.construct(
+            trajectory, intent, self.insight, meta_data
+        )
+        lm_config = self.lm_config
+        lm_config.model = self.intention_model
+        n = 0
+        while True:
+            response = call_llm(lm_config, prompt)
+            force_prefix = self.intention_prompt_constructor.instruction[
+                "meta_data"
+            ].get("force_prefix", "")
+            response = f"{force_prefix}{response}"
+            n += 1
+            try:
+                parsed_response, self.intention = (
+                    self.intention_prompt_constructor.extract_action(response)
+                )
+                if self.action_set_tag == "id_accessibility_tree":
+                    action = create_id_based_action(parsed_response)
+                elif self.action_set_tag == "playwright":
+                    action = create_playwright_action(parsed_response)
+                else:
+                    raise ValueError(f"Unknown action type {self.action_set_tag}")
+                action["raw_prediction"] = response
+                break
+            except ActionParsingError as e:
+                if n >= lm_config.gen_config["max_retry"]:
+                    action = create_none_action()
+                    action["raw_prediction"] = response
+                    self.intention = ""
+                    break
+
+        return action
+
+    def reset(self, test_config_file: str) -> None:
+        self.first = True
+        self.insight = ""
 
 
 def construct_agent(args: argparse.Namespace) -> Agent:
@@ -175,8 +265,22 @@ def construct_agent(args: argparse.Namespace) -> Agent:
             lm_config=llm_config,
             prompt_constructor=prompt_constructor,
         )
-    else:
-        raise NotImplementedError(
-            f"agent type {args.agent_type} not implemented"
+    elif args.agent_type == "reflect":
+        tokenizer = Tokenizer(args.provider, args.model)
+        intention_prompt_constructor = IntentionPromptConstructor(
+            args.intention_instruction_path, lm_config=llm_config, tokenizer=tokenizer
         )
+        insight_prompt_constructor = InsightPromptConstructor(
+            args.insight_instruction_path, lm_config=llm_config, tokenizer=tokenizer
+        )
+        agent = ReflectAgent(
+            action_set_tag=args.action_set_tag,
+            lm_config=llm_config,
+            intention_prompt_constructor=intention_prompt_constructor,
+            insight_prompt_constructor=insight_prompt_constructor,
+            intention_model=args.intention_model,
+            insight_model=args.insight_model,
+        )
+    else:
+        raise NotImplementedError(f"agent type {args.agent_type} not implemented")
     return agent

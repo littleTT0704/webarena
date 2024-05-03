@@ -38,13 +38,12 @@ class PromptConstructor(object):
     def get_lm_api_input(
         self, intro: str, examples: list[tuple[str, str]], current: str
     ) -> APIInput:
-
         """Return the require format for an API"""
         message: list[dict[str, str]] | str
         if "openai" in self.lm_config.provider:
             if self.lm_config.mode == "chat":
                 message = [{"role": "system", "content": intro}]
-                for (x, y) in examples:
+                for x, y in examples:
                     message.append(
                         {
                             "role": "system",
@@ -102,6 +101,26 @@ class PromptConstructor(object):
                     return message
                 else:
                     raise ValueError("Only chat mode is supported for Llama-2")
+            elif "Llama-3" in self.lm_config.model:
+                if self.lm_config.mode == "chat":
+                    message = [{"role": "system", "content": intro}]
+                    for x, y in examples:
+                        message.append(
+                            {
+                                "role": "user",
+                                "content": x,
+                            }
+                        )
+                        message.append(
+                            {
+                                "role": "assistant",
+                                "content": y,
+                            }
+                        )
+                    message.append({"role": "user", "content": current})
+                    return message
+                else:
+                    raise ValueError("Only chat mode is supported for Llama-3")
             else:
                 raise ValueError(
                     f"Huggingface models do not support model_tag {self.lm_config.gen_config['model_tag']}"
@@ -198,9 +217,7 @@ class DirectPromptConstructor(PromptConstructor):
         if match:
             return match.group(1).strip()
         else:
-            raise ActionParsingError(
-                f"Cannot parse action from response {response}"
-            )
+            raise ActionParsingError(f"Cannot parse action from response {response}")
 
 
 class CoTPromptConstructor(PromptConstructor):
@@ -258,3 +275,134 @@ class CoTPromptConstructor(PromptConstructor):
             raise ActionParsingError(
                 f'Cannot find the answer phrase "{self.answer_phrase}" in "{response}"'
             )
+
+
+class IntentionPromptConstructor(PromptConstructor):
+    """The agent will perform step-by-step reasoning before the answer"""
+
+    def __init__(
+        self,
+        instruction_path: str | Path,
+        lm_config: lm_config.LMConfig,
+        tokenizer: Tokenizer,
+    ):
+        super().__init__(instruction_path, lm_config, tokenizer)
+        self.answer_phrase = self.instruction["meta_data"]["answer_phrase"]
+
+    def construct(
+        self,
+        trajectory: Trajectory,
+        objective: str,
+        insight: str,
+        meta_data: dict[str, Any] = {},
+    ) -> APIInput:
+        # TODO: add insight to the prompt template
+        intro = self.instruction["intro"]
+        examples = self.instruction["examples"]
+        template = self.instruction["template"]
+        keywords = self.instruction["meta_data"]["keywords"]
+        state_info: StateInfo = trajectory[-1]  # type: ignore[assignment]
+
+        obs = state_info["observation"][self.obs_modality]
+        max_obs_length = self.lm_config.gen_config["max_obs_length"]
+        if max_obs_length:
+            obs = self.tokenizer.decode(self.tokenizer.encode(obs)[:max_obs_length])  # type: ignore[arg-type]
+
+        page = state_info["info"]["page"]
+        url = page.url
+        previous_action_str = meta_data["action_history"][-1]
+        current = template.format(
+            objective=objective,
+            url=self.map_url_to_real(url),
+            observation=obs,
+            previous_action=previous_action_str,
+            insight=insight,
+        )
+
+        assert all([f"{{k}}" not in current for k in keywords])
+
+        prompt = self.get_lm_api_input(intro, examples, current)
+        return prompt
+
+    def _extract_action(self, response: str) -> tuple[str, str]:
+        # TODO: extract intention as the second element in the tuple
+        # find the first occurence of action
+        # find action and intention
+        action_pattern = r"Action: ```(.+?)```"
+        intention_pattern = r"Intention: (.+)"
+        # Search for the patterns in the text
+        action_match = re.search(action_pattern, response)
+        intention_match = re.search(intention_pattern, response)
+        if action_match and intention_match:
+            # Extract the action and intention
+            action = action_match.group(1).strip()
+            intention = intention_match.group(1).strip()
+            return (action, intention)
+        else:
+            raise ActionParsingError(
+                f'Cannot find the answer phrase "{self.answer_phrase}" in "{response}"'
+            )
+
+
+class InsightPromptConstructor(PromptConstructor):
+    """The agent will perform step-by-step reasoning before the answer"""
+
+    def __init__(
+        self,
+        instruction_path: str | Path,
+        lm_config: lm_config.LMConfig,
+        tokenizer: Tokenizer,
+    ):
+        super().__init__(instruction_path, lm_config, tokenizer)
+        self.answer_phrase = self.instruction["meta_data"]["answer_phrase"]
+
+    def construct(
+        self,
+        trajectory: Trajectory,
+        intent: str,
+        previous_intention: str,
+        meta_data: dict[str, Any] = {},
+    ) -> APIInput:
+        # TODO: format template with previous intention and last two observations (or maybe previous action?)
+        intro = self.instruction["intro"]
+        examples = self.instruction["examples"]
+        template = self.instruction["template"]
+        keywords = self.instruction["meta_data"]["keywords"]
+        state_info: StateInfo = trajectory[-1]  # type: ignore[assignment]
+        previous_state_info: StateInfo = trajectory[-3]
+
+        obs = state_info["observation"][self.obs_modality]
+        previous_obs = previous_state_info["observation"][self.obs_modality]
+        max_obs_length = self.lm_config.gen_config["max_obs_length"]
+        if max_obs_length:
+            obs = self.tokenizer.decode(self.tokenizer.encode(obs)[:max_obs_length])  # type: ignore[arg-type]
+            previous_obs = self.tokenizer.decode(self.tokenizer.encode(previous_obs)[:max_obs_length])  # type: ignore[arg-type]
+
+        page = state_info["info"]["page"]
+        url = page.url
+        previous_action_str = meta_data["action_history"][-1]
+        current = template.format(
+            previous_observation=previous_obs,
+            current_observation=obs,
+            current_url=self.map_url_to_real(url),
+            action=previous_action_str,
+            intention=previous_intention,
+            objective=intent,
+        )
+
+        assert all([f"{{k}}" not in current for k in keywords])
+
+        prompt = self.get_lm_api_input(intro, examples, current)
+        return prompt
+
+    def _extract_action(self, response: str) -> str:
+        # TODO: output insight about the previous action
+        # if previous action is successful, insight should be about what to do next
+        # if previous action is unsuccessful, insight should be about what went wrong
+
+        if ": " in response:
+            # Return the matched group which contains everything after ": "
+            return response.split(": ")[1]
+        else:
+            # Raise an error if the pattern is not found
+            raise Exception("Pattern not found in the text.")

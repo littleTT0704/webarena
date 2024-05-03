@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 
-@dataclass(frozen=True)
+@dataclass()  # frozen=True)
 class LMConfig:
     """A config for a language model.
 
@@ -31,9 +31,7 @@ class LMConfig:
 
 
 def construct_llm_config(args: argparse.Namespace) -> LMConfig:
-    llm_config = LMConfig(
-        provider=args.provider, model=args.model, mode=args.mode
-    )
+    llm_config = LMConfig(provider=args.provider, model=args.model, mode=args.mode)
     if args.provider == "openai":
         llm_config.gen_config["temperature"] = args.temperature
         llm_config.gen_config["top_p"] = args.top_p

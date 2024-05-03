@@ -44,9 +44,9 @@ def get_render_action(
         case "id_accessibility_tree":
             text_meta_data = observation_metadata["text"]
             if action["element_id"] in text_meta_data["obs_nodes_info"]:
-                node_content = text_meta_data["obs_nodes_info"][
-                    action["element_id"]
-                ]["text"]
+                node_content = text_meta_data["obs_nodes_info"][action["element_id"]][
+                    "text"
+                ]
             else:
                 node_content = "No match found"
 
@@ -84,9 +84,7 @@ def get_action_description(
                         action["element_id"]
                     ]["text"]
                     node_content = " ".join(node_content.split()[1:])
-                    action_str = action2str(
-                        action, action_set_tag, node_content
-                    )
+                    action_str = action2str(action, action_set_tag, node_content)
                 else:
                     action_str = f"Attempt to perfom \"{action_name}\" on element \"[{action['element_id']}]\" but no matching element found. Please check the observation more carefully."
             else:
@@ -94,9 +92,9 @@ def get_action_description(
                     action["action_type"] == ActionTypes.NONE
                     and prompt_constructor is not None
                 ):
-                    action_splitter = prompt_constructor.instruction[
-                        "meta_data"
-                    ]["action_splitter"]
+                    action_splitter = prompt_constructor.instruction["meta_data"][
+                        "action_splitter"
+                    ]
                     action_str = f'The previous prediction you issued was "{action["raw_prediction"]}". However, the format was incorrect. Ensure that the action is wrapped inside a pair of {action_splitter} and enclose arguments within [] as follows: {action_splitter}action [arg] ...{action_splitter}.'
                 else:
                     action_str = action2str(action, action_set_tag, "")
@@ -113,9 +111,7 @@ def get_action_description(
 class RenderHelper(object):
     """Helper class to render text and image observations and meta data in the trajectory"""
 
-    def __init__(
-        self, config_file: str, result_dir: str, action_set_tag: str
-    ) -> None:
+    def __init__(self, config_file: str, result_dir: str, action_set_tag: str) -> None:
         with open(config_file, "r") as f:
             _config = json.load(f)
             _config_str = ""
@@ -126,9 +122,7 @@ class RenderHelper(object):
 
         self.action_set_tag = action_set_tag
 
-        self.render_file = open(
-            Path(result_dir) / f"render_{task_id}.html", "a+"
-        )
+        self.render_file = open(Path(result_dir) / f"render_{task_id}.html", "a+")
         self.render_file.truncate(0)
         # write init template
         self.render_file.write(HTML_TEMPLATE.format(body=f"{_config_str}"))
@@ -141,6 +135,7 @@ class RenderHelper(object):
         state_info: StateInfo,
         meta_data: dict[str, Any],
         render_screenshot: bool = False,
+        insight: str = None,
     ) -> None:
         """Render the trajectory"""
         # text observation
@@ -164,6 +159,10 @@ class RenderHelper(object):
 
         # meta data
         new_content += f"<div class='prev_action' style='background-color:pink'>{meta_data['action_history'][-1]}</div>\n"
+
+        # insight
+        if insight:
+            new_content += f"<div class='insight' style='background-color:powderblue'>{insight}</div>\n"
 
         # action
         action_str = get_render_action(
