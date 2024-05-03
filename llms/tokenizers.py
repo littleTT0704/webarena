@@ -1,5 +1,5 @@
 from typing import Any
-
+import os
 import tiktoken
 from transformers import LlamaTokenizer  # type: ignore
 from transformers import AutoTokenizer
@@ -14,7 +14,7 @@ class Tokenizer(object):
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_name, token=os.environ.get("HF_TOKEN")
             )
-            if "Llama-2" in model_name:
+            if "Llama" in model_name:
                 # turn off adding special tokens automatically
                 self.tokenizer.add_special_tokens = False  # type: ignore[attr-defined]
                 self.tokenizer.add_bos_token = False  # type: ignore[attr-defined]
